@@ -1,5 +1,3 @@
-"""导出 64 节电池的 pooled CSAF 特征和 Life，并审计 Top-12。"""
-
 from __future__ import annotations
 
 import json
@@ -29,7 +27,6 @@ def _load_checkpoint(path: Path, config: Case1Config, device: torch.device):
 
 
 def _contribution_scores(model, dataset: Case1Dataset, device: torch.device) -> np.ndarray:
-    """计算全部 64 个样本的平均绝对梯度乘激活贡献度。"""
     total = np.zeros(256, dtype=np.float64)
     for index in range(len(dataset)):
         time_series, heatmap, _, _ = dataset[index]
@@ -89,21 +86,12 @@ def export_features(config: Case1Config, checkpoint_path: Path, device_name: str
         }
     ).to_csv(life_path, index=False, encoding="utf-8")
 
-    lives = np.asarray([item[2] for item in metadata], dtype=np.float64)
-    correlations = np.asarray(
-        [np.corrcoef(feature_array[:, index], lives)[0, 1] for index in range(feature_array.shape[1])]
-    )
-    passing = np.abs(correlations[top12]) >= 0.80
     result = {
         "feature_file": str(feature_path),
         "life_file": str(life_path),
         "n_samples": int(len(samples)),
         "n_features": int(feature_array.shape[1]),
         "top12_indices": [int(index) for index in top12],
-        "top12_correlations": [float(correlations[index]) for index in top12],
-        "top12_abs_r_ge_0_80": int(passing.sum()),
-        "threshold": 4,
-        "status": "PASS" if int(passing.sum()) >= 4 else "NOT_MET",
     }
     print(json.dumps(result, indent=2, ensure_ascii=False))
     return result

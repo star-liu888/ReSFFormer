@@ -1,5 +1,3 @@
-"""训练与论文对应的 Case 1 模型，并将 checkpoint 写到 Star 目录外。"""
-
 from __future__ import annotations
 
 import csv
@@ -9,7 +7,6 @@ import sys
 from pathlib import Path
 from typing import Dict, Iterable, Tuple
 
-import numpy as np
 import torch
 from torch import Tensor
 from torch.nn import functional as F
@@ -23,13 +20,19 @@ if str(THIS_DIR) not in sys.path:
 
 from config import Case1Config, config_from_args, make_parser, set_seed
 from data import Case1Dataset, Normalizer, load_case1_samples, split_case1_samples
+from metrics import regression_metrics
 from model import build_model
+
+def add_amplitude_jitter(values: Tensor, std: float, generator: torch.Generator | None = None) -> Tensor:
+    noise = torch.randn(values.shape, device=values.device, dtype=values.dtype, generator=generator) * std
+    return values * (1.0 + noise)
 
 
 def correlation_loss(features: Tensor, target: Tensor) -> Tensor:
-    """式（18）的负 Fisher-z 变换 Pearson 相关性损失。"""
     if features.shape[0] < 2:
         return features.new_zeros(())
+    if features.ndim == 1:
+        features = features[:, None]
     centered_features = features - features.mean(dim=0, keepdim=True)
     centered_target = target - target.mean()
     numerator = (centered_features * centered_target[:, None]).sum(dim=0)
@@ -39,11 +42,6 @@ def correlation_loss(features: Tensor, target: Tensor) -> Tensor:
     )
     rho = (numerator / denominator).clamp(-1.0 + 1e-5, 1.0 - 1e-5)
     return -torch.atanh(rho).mean()
-
-
-def add_amplitude_jitter(values: Tensor, std: float, generator: torch.Generator | None = None) -> Tensor:
-    noise = torch.randn(values.shape, device=values.device, dtype=values.dtype, generator=generator) * std
-    return values * (1.0 + noise)
 
 
 def loss_components(
@@ -84,26 +82,14 @@ def _evaluate(model, loader: DataLoader, device: torch.device) -> Dict[str, floa
             prediction = model(time_series.to(device), heatmap.to(device))
             predictions.append(prediction.cpu())
             targets.append(target)
-    y_hat = torch.cat(predictions).numpy()
-    y = torch.cat(targets).numpy()
-    return {
-        "rmse_normalized": float(np.sqrt(np.mean((y_hat - y) ** 2))),
-        "mae_normalized": float(np.mean(np.abs(y_hat - y))),
-    }
+    return regression_metrics(torch.cat(predictions), torch.cat(targets))
 
 
 def _full_training_objective(
     model, loader: DataLoader, device: torch.device, config: Case1Config, epoch: int
 ) -> Dict[str, float]:
-    """在全部训练电池上计算式（20），用于选择 checkpoint。
-
-    batch size 为 8 时，单个 mini-batch 的 Pearson 值波动较大。训练仍严格采用
-    论文报告的 mini-batch 设置，但 checkpoint 选择不能依赖偶然的单批次相关性。
-    此处只使用 45 个训练电池，不会读取测试集结果。
-    """
     model.eval()
     predictions, targets, fused_features, jittered_predictions = [], [], [], []
-    # 只在本次评估中固定一致性扰动，避免 checkpoint 选择受到随机扰动影响。
     with torch.random.fork_rng(devices=[device] if device.type == "cuda" else []):
         torch.manual_seed(config.seed + 10_000 + epoch)
         if device.type == "cuda":
@@ -234,7 +220,7 @@ def train(config: Case1Config, device_name: str | None = None) -> Path:
                 f"epoch {epoch + 1:03d}/{config.epochs} "
                 f"train={train_metrics['total']:.5f} "
                 f"select={selection_metrics['selection_total']:.5f} "
-                f"test_rmse_norm={test_metrics['rmse_normalized']:.5f}"
+                f"test_rmse={test_metrics['rmse']:.5f}"
             )
 
     (config.run_dir / "history.json").write_text(json.dumps(history, indent=2), encoding="utf-8")
