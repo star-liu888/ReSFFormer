@@ -1,56 +1,62 @@
-# 🚀 AIO-FE + ReSFFormer
-## Ultra-Early First-Cycle Battery Life Prediction
+# AIO-FE + ReSFFormer
+## Ultra-Early and Transferable First-Cycle Battery Life Prediction
 
-[![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)]()
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.x-ee4c2c.svg)]()
-[![Task](https://img.shields.io/badge/Task-Battery%20Life%20Prediction-0b7285.svg)]()
-[![Status](https://img.shields.io/badge/Status-Research%20Code-success.svg)]()
-
-This repository contains the Case 1 implementation for the paper
+This repository contains the Case 1 research implementation accompanying
 *Ultra-Early and Transferable First-Cycle Battery Life Prediction for Cell
 Grouping with AIO-FE and ReSFFormer*.
 
-## 🧠 Proposed Framework
+The released files support reproducible training and evaluation. The paper and
+supplementary material remain the primary references for equations, experiment
+settings, and architectural interpretation.
 
-The method combines complementary first-cycle signals in a single end-to-end
-predictor:
+## Background & Motivation
 
-- **AIO-FE** learns multi-scale temporal representations from the first-cycle
-  voltage and current traces.
-- **Heatmap encoding** extracts spatial degradation cues from the charging
-  correlation map with deformable convolutions.
-- **CSAF** adaptively modulates the temporal representation with heatmap
-  context, producing the fused battery representation.
-- **ReSFFormer** models temporal dependencies with phase-aligned rotary
-  attention and the dual-domain temporal (DuET) attention mechanism.
+Accurate battery life estimation from early-cycle measurements is important for
+electric-vehicle safety, battery health diagnostics, and predictive maintenance.
+Conventional workflows often treat degradation modeling as a staged process,
+which can introduce error propagation and inconsistent feature usage.
 
-The supplied data files contain the 256-dimensional pooled CSAF features and
-the corresponding Life values for all 64 Case 1 cells.
+The proposed framework uses first-cycle observations to learn a shared battery
+degradation representation, then adapts this representation to life prediction
+under limited-sample conditions.
 
-## 📁 Repository Layout
+## Proposed Method: Targeted Representation Learning
 
-```text
-config.py                 # Reproducible experiment settings
-data.py                   # Case 1 data loading and split utilities
-model.py                  # AIO-FE, CSAF, DuET and ReSFFormer
-main.py                   # Training entry point
-export_features.py        # CSAF feature export and correlation audit
-case1_csaf_features.csv   # Exported 256-D CSAF features
-case1_life.csv            # Cell Life values and split labels
-requirements.txt          # Python dependencies
-```
+The method combines temporal measurements and heatmap-derived information in an
+end-to-end learning pipeline. A shared representation captures long-term aging
+patterns, while targeted modules refine the representation for robust battery
+life regression.
 
-## ▶️ Usage
+The implementation follows the supplementary-material defaults: time-series
+input dimension 2, heatmap channels 3, sequence length 100, model dimension 256,
+8 attention heads, 3 ReSFFormer layers, feed-forward dimension 1024, dropout
+0.1, batch size 8, 200 training epochs, Adam learning rate 2e-4, weight decay
+1e-4, and a 10-epoch warm-up cosine schedule.
 
-```bash
-python main.py --device cuda
-python export_features.py --checkpoint ..\\case1_run\\best.pt --device cuda
-```
+## ReSFFormer
 
-The training checkpoint is written outside this submission directory. The
-export command reports the Life correlation audit for the Top-12 CSAF
-dimensions without modifying the features or labels.
+ReSFFormer is designed for few-sample battery life prediction. It combines
+condition-selective feature fusion, phase-aware positional alignment, and
+dual-domain temporal attention. These components are described at a high level
+here; the detailed derivations and ablation settings are provided in the paper.
 
-## 📌 Citation
+The model is evaluated with RMSE, MAE, and MAPE, matching the reported
+evaluation protocol.
 
-If you use this code, please cite the accompanying paper.
+## Dataset
+
+Case 1 contains 64 laboratory cells tested under a CC-CV charging protocol. The
+public dataset references are listed in `data/public_datasets.md`.
+
+## Environment
+
+- Python 3.10+
+- PyTorch 2.x with a compatible torchvision build
+- NumPy, pandas, Pillow, and matplotlib
+
+Install dependencies from `requirements.txt`, then set the local data path
+before training.
+
+## Citation
+
+If you use this implementation, please cite the accompanying paper.
