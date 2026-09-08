@@ -1,6 +1,9 @@
 # AIO-FE + ReSFFormer
 ## Ultra-Early and Transferable First-Cycle Battery Life Prediction
 
+📬 More comprehensive data and code support are available upon reasonable
+request at xinliu1224@hrbeu.edu.cn.
+
 This repository accompanies *Ultra-Early and Transferable First-Cycle Battery
 Life Prediction for Cell Grouping with AIO-FE and ReSFFormer*.
 
